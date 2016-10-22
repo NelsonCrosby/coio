@@ -7,7 +7,7 @@ CFLAGS += -fPIC
 CFLAGS += $(shell pkg-config --cflags $(pkgs))
 LDLIBS += $(shell pkg-config --libs $(pkgs))
 
-coio = src/coio.o src/loop.o
+coio = src/coio.o src/loop.o src/async.o
 
 all: coio.so
 clean:
