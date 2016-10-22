@@ -10,6 +10,8 @@ static luaL_Reg module[] = {
     {"run", coio_loop_run},
     {NULL, NULL}
 };
+void *const coio_loop_curidx = (void *) &module;
+
 
 int luaopen_coio_loop(lua_State *L)
 {
@@ -40,8 +42,6 @@ int coio_loop_create(lua_State *L)
 }
 
 
-static const int k;
-void *const coio_loop_curidx = (void *) &k;
 // NOTE: This function is _blocking_.
 int coio_loop_run(lua_State *L)
 {

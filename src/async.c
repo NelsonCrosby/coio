@@ -10,7 +10,6 @@ static luaL_Reg module[] = {
     {"await", coio_await},
     {NULL, NULL}
 };
-void *const coio_async_noauto = (void *) &module;
 
 int luaopen_coio_async(lua_State *L)
 {
@@ -35,88 +34,6 @@ int luaopen_coio_async(lua_State *L)
 }
 
 
-static void async_push(lua_State *t);
-static void async_resume(lua_State *t, int nargs)
-{
-    int status = lua_resume(t, NULL, nargs);
-    if (status == LUA_YIELD) {
-        if (lua_touserdata(t, 1) != coio_async_noauto) {
-            // Non-IO yield, need to push
-            // thread back to event loop
-            async_push(t);
-        }
-    } else {
-        // Thread done
-        if (status == LUA_OK) {
-            lua_pushboolean(t, 1);
-        } else {
-            lua_pushboolean(t, 0);
-        }
-        int nresults = lua_gettop(t);
-        // Get awaiting thread
-        // R = REG[curidx]
-        lua_pushlightuserdata(t, coio_loop_curidx);
-        lua_gettable(t, LUA_REGISTRYINDEX);
-        // ai = R[t]
-        lua_pushlightuserdata(t, (void *) t);
-        lua_gettable(t, -2);
-        // awt = ai[1]
-        lua_pushinteger(t, 1);
-        lua_gettable(t, -2);
-        if (lua_isuserdata(t, -1)) {
-            // u = touserdata(awt)
-            lua_State *u = (lua_State *) lua_touserdata(t, -1);
-            lua_pop(t, 3);  // Pop awt, ai, R
-            // Put results on u
-            lua_xmove(t, u, nresults);
-            // Push u to event loop
-            async_push(u);
-        }
-        // Let gc free this thread
-        lua_pushlightuserdata(t, coio_loop_curidx);
-        lua_gettable(t, LUA_REGISTRYINDEX);
-        lua_pushlightuserdata(t, (void *) t);
-        lua_pushnil(t);
-        lua_settable(t, -3);    // t is now only ref'd by itself
-    }
-}
-
-static void async_timer_resume(uv_timer_t *h)
-{
-    lua_State *t = (lua_State *) h->data;
-    // Let h be freed
-    lua_pushlightuserdata(t, coio_loop_curidx);
-    lua_gettable(t, LUA_REGISTRYINDEX);
-    lua_pushlightuserdata(t, (void *) h);
-    lua_pushnil(t);
-    lua_settable(t, -3);
-    lua_pop(t, 1);  // Reset stack
-
-    // Resume t
-    async_resume(t, 0);
-}
-
-static void async_push(lua_State *t)
-{
-    // Get current loop
-    lua_pushlightuserdata(t, coio_loop_curidx);
-    lua_gettable(t, LUA_REGISTRYINDEX);
-    lua_getfield(t, -1, "uv_loop");
-    uv_loop_t *loop = (uv_loop_t *) lua_touserdata(t, -1);
-    lua_pop(t, 1);  // Don't need loop on stack
-    // Queue thread to be called on event loop
-    uv_timer_t *h = (uv_timer_t *) lua_newuserdata(t, sizeof(uv_timer_t));
-    uv_timer_init(loop, h);
-    h->data = (void *) t;   // Make thread accessible from callback
-    uv_timer_start(h, async_timer_resume, 0, 0);
-    // Prevent timer from being gc'd
-    // Loop registry is already at -2
-    lua_pushlightuserdata(t, (void *) h);
-    lua_insert(t, -2);
-    lua_settable(t, -3);
-    lua_pop(t, 1);  // Remove loop reg to reset stack
-}
-
 static int coio_async_call(lua_State *L)
 {
     // Create thread
@@ -140,7 +57,7 @@ static int coio_async_call(lua_State *L)
     lua_settable(L, -3);    // Set R[t] = ai
     // stack: ..., ai, R
     // Queue thread
-    async_push(t);
+    coio_util_queue_thread(t);
 
     // Return async instance
     lua_pop(L, 1);  // stack: ..., ai
