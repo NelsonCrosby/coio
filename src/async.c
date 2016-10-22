@@ -75,5 +75,55 @@ int coio_async(lua_State *L)
 
 int coio_await(lua_State *L)
 {
-    return 0;
+    int ctx, ok;
+    switch (lua_getctx(L, &ctx)) {
+    case LUA_OK:
+        // Get rid of any extra arguments
+        lua_pop(L, lua_gettop(L) - 1);
+        // Ensure we're not going to run
+        // head-first into major trouble
+        // with the gc.
+        // Check there is a running event loop.
+        lua_pushlightuserdata(L, coio_loop_curidx);
+        lua_gettable(L, LUA_REGISTRYINDEX);
+        if (lua_isnil(L, -1)) {
+            return luaL_error(L,
+                    "await can only be called with a running event loop");
+        }
+        // Check the current thread
+        // is an async function (on
+        // the event loop's table).
+        lua_pushlightuserdata(L, (void *) L);
+        lua_gettable(L, -2);
+        if (lua_isnil(L, -1)) {
+            return luaL_error(L,
+                    "await can only be called from an async function");
+        } else {
+            lua_pop(L, 2);  // Only needed these for verification
+        }
+        // Set this thread as awaiting
+        // on the async instance.
+        lua_pushinteger(L, 1);
+        lua_pushlightuserdata(L, (void *) L);
+        lua_settable(L, -3);
+        lua_pop(L, 1);  // Clear stack
+        // Do an ioyield to ensure we don't
+        // get resumed until we actually
+        // have the results.
+        lua_pushlightuserdata(L, coio_util_ioyield);
+        return lua_yieldk(L, 1, ctx, coio_await);
+    default:
+        lua_remove(L, 1);
+        // Pull the success indicator
+        // from the stack
+        ok = lua_toboolean(L, 1);
+        lua_remove(L, 1);
+        if (ok) {
+            // Successful - return results
+            return lua_gettop(L);
+        } else {
+            // Failure - re-raise error
+            return lua_error(L);
+        }
+    }
 }

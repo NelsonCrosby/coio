@@ -1,5 +1,5 @@
 
-CFLAGS ?= -Wall -Werror -MMD
+CFLAGS ?= -Wall -Werror -MMD -g
 
 pkgs = libuv lua52
 
