@@ -1,3 +1,4 @@
+-- vim: syntax=lua
 package = "coio"
 version = "scm-1"
 source = {
