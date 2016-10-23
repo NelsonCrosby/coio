@@ -104,7 +104,7 @@ int coio_await(lua_State *L)
         // Check there isn't already something awaiting
         lua_pushinteger(L, 1);
         lua_gettable(L, -2);
-        if (!lua_isnil(L, -2)) {
+        if (!lua_isnil(L, -1)) {
             return luaL_error(L,
                     "each thread can only have one other awaiting it");
         } else {
