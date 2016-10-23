@@ -101,6 +101,15 @@ int coio_await(lua_State *L)
         } else {
             lua_pop(L, 2);  // Only needed these for verification
         }
+        // Check there isn't already something awaiting
+        lua_pushinteger(L, 1);
+        lua_gettable(L, -2);
+        if (!lua_isnil(L, -2)) {
+            return luaL_error(L,
+                    "each thread can only have one other awaiting it");
+        } else {
+            lua_pop(L, 1);
+        }
         // Set this thread as awaiting
         // on the async instance.
         lua_pushinteger(L, 1);
