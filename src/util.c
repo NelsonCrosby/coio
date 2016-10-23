@@ -62,15 +62,6 @@ void coio_util_run_thread(lua_State *t, int nargs)
         // Stop gc so thread doesn't disappear
         // before we get our traceback
         lua_gc(t, LUA_GCSTOP, 0);
-        // Let gc free this thread
-        // R = REG[curidx]
-        lua_pushlightuserdata(t, coio_loop_curidx);
-        lua_gettable(t, LUA_REGISTRYINDEX);
-        // R[t] = nil
-        lua_pushlightuserdata(t, (void *) t);
-        lua_pushnil(t);
-        lua_settable(t, -3);    // t is now only ref'd by itself
-        lua_pop(t, 1);  // Pop R
         if (!error_caught) {
             // There's an unhandled error.
             // Get a traceback for justice,
@@ -97,9 +88,10 @@ void coio_util_run_thread(lua_State *t, int nargs)
 }
 
 
-static void timer_resume(uv_timer_t *h)
+static void handle_close(uv_handle_t *h)
 {
     lua_State *t = (lua_State *) h->data;
+
     // Let h be freed
     lua_pushlightuserdata(t, coio_loop_curidx);
     lua_gettable(t, LUA_REGISTRYINDEX);
@@ -108,11 +100,28 @@ static void timer_resume(uv_timer_t *h)
     lua_settable(t, -3);
     lua_pop(t, 1);  // Reset stack
 
+    // Let gc free this thread
+    // R = REG[curidx]
+    lua_pushlightuserdata(t, coio_loop_curidx);
+    lua_gettable(t, LUA_REGISTRYINDEX);
+    // R[t] = nil
+    lua_pushlightuserdata(t, (void *) t);
+    lua_pushnil(t);
+    lua_settable(t, -3);    // t is now only ref'd by itself
+    lua_pop(t, 1);  // Pop R
+}
+
+static void timer_resume(uv_timer_t *h)
+{
+    lua_State *t = (lua_State *) h->data;
+
     int nargs = lua_status(t) == LUA_OK
         ? lua_gettop(t) - 1
         : 0;
     // Resume t
     coio_util_run_thread(t, nargs);
+    // Close h
+    uv_close((uv_handle_t *) h, handle_close);
 }
 
 void coio_util_queue_thread(lua_State *t)

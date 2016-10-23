@@ -91,9 +91,10 @@ int coio_loop_run(lua_State *L)
 int coio_loop__gc(lua_State *L)
 {
     uv_loop_t *loop = (uv_loop_t *) lua_touserdata(L, 1);
-    // TODO: Handle UV_EBUSY
-    // The way to do that would probably be to error. I don't see any reason
-    // that the GC would collect this object if the loop is still running.
-    uv_loop_close(loop);
+    // Ask loop to stop
+    uv_stop(loop);
+    // Wait for loop to finish
+    while (uv_loop_close(loop) && uv_run(loop, UV_RUN_ONCE)) {
+    }
     return 0;
 }
