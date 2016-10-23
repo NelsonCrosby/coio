@@ -20,28 +20,30 @@ void coio_util_run_thread(lua_State *t, int nargs)
         }
     } else {
         // Thread done
-        if (status == LUA_OK) {
-            lua_pushboolean(t, 1);
-        } else {
-            lua_pushboolean(t, 0);
-        }
+        // Add status boolean
+        lua_pushboolean(t, status == LUA_OK);
         lua_insert(t, 1);
+        // Get number of results before
+        // we start clobbering the stack
         int nresults = lua_gettop(t);
         // Get awaiting thread
-        // R = REG[curidx]
-        lua_pushlightuserdata(t, coio_loop_curidx);
-        lua_gettable(t, LUA_REGISTRYINDEX);
-        // ai = R[t]
-        lua_pushlightuserdata(t, (void *) t);
-        lua_gettable(t, -2);
-        // awt = ai[1]
-        lua_pushinteger(t, 1);
-        lua_gettable(t, -2);
-        int error_caught = 0;
-        if (lua_isuserdata(t, -1)) {
+        lua_State *u;
+        {
+            // R = REG[curidx]
+            lua_pushlightuserdata(t, coio_loop_curidx);
+            lua_gettable(t, LUA_REGISTRYINDEX);
+            // ai = R[t]
+            lua_pushlightuserdata(t, (void *) t);
+            lua_gettable(t, -2);
+            // awt = ai[1]
+            lua_pushinteger(t, 1);
+            lua_gettable(t, -2);
             // u = touserdata(awt)
-            lua_State *u = (lua_State *) lua_touserdata(t, -1);
+            u = (lua_State *) lua_touserdata(t, -1);
             lua_pop(t, 3);  // Pop awt, ai, R
+        }
+        if (u != NULL) {
+            // There is an awaiting function
             // Put results on u
             lua_xmove(t, u, nresults);
             if (status != LUA_OK) {
@@ -52,17 +54,7 @@ void coio_util_run_thread(lua_State *t, int nargs)
             }
             // Push u to event loop
             coio_util_queue_thread(u);
-            error_caught = 1;
-        } else {
-            lua_pop(t, 3);  // Pop awt, ai, R
-            if (status == LUA_OK) {
-                error_caught = 1;
-            }
-        }
-        // Stop gc so thread doesn't disappear
-        // before we get our traceback
-        lua_gc(t, LUA_GCSTOP, 0);
-        if (!error_caught) {
+        } else if (status != LUA_OK) {
             // There's an unhandled error.
             // Get a traceback for justice,
             // then raise error on main thread.
@@ -75,15 +67,14 @@ void coio_util_run_thread(lua_State *t, int nargs)
             // Generate traceback
             const char *msg = lua_tostring(t, -1);
             luaL_traceback(L, t, msg, 1);
-            // Restart the gc
-            lua_gc(t, LUA_GCRESTART, 0);
             // Raise error on main thread
             lua_error(L);
             return;
         } else {
-            // Restart the gc
-            lua_gc(t, LUA_GCRESTART, 0);
-        } // end else for if (!error_caught)
+            // This thread completed successfully,
+            // but nothing was awaiting it, so
+            // we let it close silently.
+        }
     } // end thread done block
 }
 
@@ -93,21 +84,23 @@ static void handle_close(uv_handle_t *h)
     lua_State *t = (lua_State *) h->data;
 
     // Let h be freed
+    // R = REG[curidx]
     lua_pushlightuserdata(t, coio_loop_curidx);
     lua_gettable(t, LUA_REGISTRYINDEX);
+    // R[h] = nil
     lua_pushlightuserdata(t, (void *) h);
     lua_pushnil(t);
-    lua_settable(t, -3);
+    lua_settable(t, -3);    // No more refs to h
     lua_pop(t, 1);  // Reset stack
 
-    // Let gc free this thread
+    // Let t be freed
     // R = REG[curidx]
     lua_pushlightuserdata(t, coio_loop_curidx);
     lua_gettable(t, LUA_REGISTRYINDEX);
     // R[t] = nil
     lua_pushlightuserdata(t, (void *) t);
     lua_pushnil(t);
-    lua_settable(t, -3);    // t is now only ref'd by itself
+    lua_settable(t, -3);    // t will be freed at next step
     lua_pop(t, 1);  // Pop R
 }
 
@@ -116,7 +109,11 @@ static void timer_resume(uv_timer_t *h)
     lua_State *t = (lua_State *) h->data;
 
     int nargs = lua_status(t) == LUA_OK
+        // If we're starting a new thread,
+        // we need to include the function args
         ? lua_gettop(t) - 1
+        // If we're resuming a thread,
+        // we don't provide args
         : 0;
     // Resume t
     coio_util_run_thread(t, nargs);
