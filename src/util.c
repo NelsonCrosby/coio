@@ -58,12 +58,14 @@ void coio_util_run_thread(lua_State *t, int nargs)
             // There's an unhandled error.
             // Get a traceback for justice,
             // then raise error on main thread.
-            // T = REG[MAINTHREAD]
-            lua_pushinteger(t, LUA_RIDX_MAINTHREAD);
+            // R = REG[curidx]
+            lua_pushlightuserdata(t, coio_loop_curidx);
             lua_gettable(t, LUA_REGISTRYINDEX);
+            // T = R.uv_run_thread
+            lua_getfield(t, -1, "uv_run_thread");
             // L = tothread(T)
             lua_State *L = lua_tothread(t, -1);
-            lua_pop(t, 1);  // Pop T
+            lua_pop(t, 2);  // Pop R, t
             // Generate traceback
             const char *msg = lua_tostring(t, -1);
             luaL_traceback(L, t, msg, 1);

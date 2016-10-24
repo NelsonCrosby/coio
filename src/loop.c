@@ -55,6 +55,8 @@ int coio_loop_run(lua_State *L)
     lua_createtable(L, 0, 1);
     lua_pushvalue(L, 1);
     lua_setfield(L, -2, "uv_loop");
+    lua_pushthread(L);
+    lua_setfield(L, -2, "uv_run_thread");
 
     // Set this loop as the current
     lua_pushlightuserdata(L, coio_loop_curidx);
