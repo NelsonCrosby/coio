@@ -65,7 +65,7 @@ void coio_util_run_thread(lua_State *t, int nargs)
             lua_getfield(t, -1, "uv_run_thread");
             // L = tothread(T)
             lua_State *L = lua_tothread(t, -1);
-            lua_pop(t, 2);  // Pop R, t
+            lua_pop(t, 2);  // Pop R, T
             // Generate traceback
             const char *msg = lua_tostring(t, -1);
             luaL_traceback(L, t, msg, 1);
