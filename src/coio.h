@@ -52,7 +52,7 @@ int coio_loop__gc(lua_State *L);
 
 // ## module `coio.async` ##
 
-// The name for the async instance metamethod.
+// The name for the async instance metatable.
 #define COIO_ASYNC_TNAME    "coio.async"
 // Loads the `coio.async` module. This
 // module provides the `async()` and

@@ -37,6 +37,14 @@ function TestAwait:testAwaitFunctionsExist()
     luaunit.assertEquals(async[2], async.await)
 end
 
+function TestAwait:testAwaitMethodExists()
+    local fn = async(function () end)
+    loop.create():run(function ()
+        local a = fn()
+        luaunit.assertEquals(a.await, async.await)
+    end)
+end
+
 local await = async.await
 
 function TestAwait:testAsyncFunctionAwaited()

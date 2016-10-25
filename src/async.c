@@ -13,6 +13,11 @@ static luaL_Reg module[] = {
 
 int luaopen_coio_async(lua_State *L)
 {
+    // Create metatable
+    luaL_newmetatable(L, COIO_ASYNC_TNAME);
+    luaL_newlib(L, module + 1);
+    lua_setfield(L, -2, "__index");
+    lua_pop(L, 1);
     // Create module
     lua_createtable(L, 2, 1);
     // Set functions in array part for unpacking
