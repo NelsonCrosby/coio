@@ -39,15 +39,6 @@ end
 
 local await = async.await
 
-function TestAwait:testAsyncFunctionCalled()
-    local called = false
-    local fn = async(function () called = true end)
-    loop.create():run(function ()
-        fn()
-    end)
-    luaunit.assertTrue(called)
-end
-
 function TestAwait:testAsyncFunctionAwaited()
     local mainCompleted = false
     local fn = async(function ()
